@@ -1,0 +1,108 @@
+kernel void bitPReversal(global int* output, int length){
+	const int id  = get_global_id(0);
+	if (id >= length) return;
+	
+	int a = id;
+	int b = 0;
+	int j = 0;
+
+	int t = log2((float)length);
+
+	while(j++ < t){
+		b = (b << 1)| (a & 1);
+		a >>= 1;
+	}
+	
+	output[id] = b;
+}
+
+
+kernel void init_vec_k(global int *array, int nels)
+{
+	const int i = get_global_id(0);
+	if (i >= nels) return;
+	array[i] = i;
+}
+
+int generatePermutation(int index,int logLength){
+	int a = index;
+	int b = 0;
+	int j = 0;	
+
+	while(j++ < logLength){
+		b = (b << 1)| (a & 1);
+		a >>= 1;
+	}
+	return b;
+}
+
+
+
+inline float2 cmult(float2 a, float2 b){
+    return (float2)( a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
+}
+
+
+kernel void fft_1(global float2* input, global float2 *output,int length){
+	const int id = get_global_id(0);
+	if (id >= length) return;
+	int logLength = log2((float)length);
+	
+	const int index_permutated = generatePermutation(id,logLength);
+	int n_half =0;
+	int mask =0;
+	int vec_n =0;
+
+	if(id <  8){
+		printf("index : %d , index permutated: %d\n",id,index_permutated);
+	}
+
+	for(int i=0;i<logLength;i++){
+		barrier(CLK_GLOBAL_MEM_FENCE);
+		mask = length >> (i+1);
+		vec_n = 2 << i;
+
+		
+
+		if(id < mask){
+			int half_n = vec_n/2;
+			int id_strided = id*vec_n;
+
+			if(id == 1){
+				printf("mask : %d , vec_n: %d, half_n %d\n",mask,vec_n,half_n);
+			}
+
+
+
+			for(int j=0;j<half_n;j++){	
+		  		const float angle = 2 * M_PI * (j / length);
+				const id_even = id+j*2;
+				const id_odd = id+j*2+1;
+				const int idx_odd = generatePermutation(id_odd, logLength);
+				const int idx_even = generatePermutation(id_even, logLength);
+				
+				if(id == 1){
+					printf("[%d] index_even : %d , index_odd %d ,idx_even_perm %d idx_odd_perm: %d\n",j,id_even,id_odd,idx_even,idx_odd);
+				}
+
+				const float2 odd = input[idx_even];
+				const float2 even = input[idx_odd];
+
+				if(id == 1){
+					printf("even : %f ,odd: %f\n",even.x,odd.x);
+				}
+
+
+				float2 wj;
+				wj.x = cos(angle);
+				wj.y = sin(angle);
+				wj = cmult(wj,odd);
+				
+				output[id_strided] = even  + wj;
+				output[id_strided + half_n] = even - wj;	
+			}
+		}
+	}
+
+}
+

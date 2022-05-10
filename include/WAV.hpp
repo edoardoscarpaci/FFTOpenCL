@@ -16,6 +16,7 @@ public:
 		this->audioFile.load(filePath);
 	};
 	std::vector<std::complex<float>> getComplexSamples(int channel=0){
+		std::cout <<"Channels: "<<audioFile.getNumChannels() << std::endl;
 		
 		int numSamples = audioFile.getNumSamplesPerChannel();
 		std::vector<std::complex<float>> samples;

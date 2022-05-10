@@ -3,7 +3,7 @@ CC = g++
 CFLAGS  = -g -Wall
 LDLIBS += -lOpenCL
 SOURCEDIR = src
-HEADERDIR = -Iinclude 
+HEADERDIR = -Iinclude -Isrc
 PROG = fft
 LD = g++
 
