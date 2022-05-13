@@ -54,7 +54,9 @@ kernel void fft_1(global float2* input, global float2 *output,int length){
 	int vec_n =0;
 
 	if(id <  8){
-		printf("index : %d , index permutated: %d\n",id,index_permutated);
+		printf("index : %d , index permutated: %d  permutated:(%f,%f)\n",id,index_permutated,input[index_permutated].x,input[index_permutated].y);
+		printf("input : (%f , %f)\n\n",input[id].x,input[id].y);
+
 	}
 
 	for(int i=0;i<logLength;i++){
@@ -62,47 +64,95 @@ kernel void fft_1(global float2* input, global float2 *output,int length){
 		mask = length >> (i+1);
 		vec_n = 2 << i;
 
+		int half_n = vec_n/2;
+		int id_strided = id*vec_n;
 		
+		if(id == 0){
+			//printf("mask : %d , vec_n: %d, half_n %d\n",mask,vec_n,half_n);
+		}
 
-		if(id < mask){
-			int half_n = vec_n/2;
-			int id_strided = id*vec_n;
-
-			if(id == 1){
-				printf("mask : %d , vec_n: %d, half_n %d\n",mask,vec_n,half_n);
+		for(int j=0;j<half_n;j++){	
+			const float angle = -2 * M_PI * j / length;
+			const int id_even = id_strided+j*2;
+			const int id_odd = id_strided+j*2 +1;
+			const int idx_odd = generatePermutation(id_odd, logLength);
+			const int idx_even = generatePermutation(id_even, logLength);
+			
+			if(id == 0){
+				//printf("[%d] index_even : %d , index_odd %d ,idx_even_perm %d idx_odd_perm: %d  id_strided: %d\n",j,id_even,id_odd,idx_even,idx_odd,id_strided);
 			}
 
-
-
-			for(int j=0;j<half_n;j++){	
-		  		const float angle = 2 * M_PI * (j / length);
-				const id_even = id+j*2;
-				const id_odd = id+j*2+1;
-				const int idx_odd = generatePermutation(id_odd, logLength);
-				const int idx_even = generatePermutation(id_even, logLength);
-				
-				if(id == 1){
-					printf("[%d] index_even : %d , index_odd %d ,idx_even_perm %d idx_odd_perm: %d\n",j,id_even,id_odd,idx_even,idx_odd);
-				}
-
-				const float2 odd = input[idx_even];
-				const float2 even = input[idx_odd];
-
-				if(id == 1){
-					printf("even : %f ,odd: %f\n",even.x,odd.x);
-				}
-
-
-				float2 wj;
-				wj.x = cos(angle);
-				wj.y = sin(angle);
-				wj = cmult(wj,odd);
-				
-				output[id_strided] = even  + wj;
-				output[id_strided + half_n] = even - wj;	
+			const float2 odd = input[idx_odd];
+			const float2 even = input[idx_even];
+			
+			if(id == 0){
+				printf("even : (%f , %f) ,odd: (%f , %f)\n",even.x,even.y,odd.x,odd.y);
 			}
+			float2 wj;
+			wj.x = cos(angle);
+			wj.y = sin(angle);	
+			
+			if(id ==0){
+				//printf("WJ: x : %f y: %f\n",wj.x,wj.y);
+			}
+			wj = cmult(wj,odd);
+			output[id_strided] = even  + wj;
+			output[id_strided + half_n] = even - wj;	
 		}
 	}
-
+	
 }
+//[0] = 0 , [1] = 1, [2] = 2 , [3] = 3
+// group size = 2
+//base offset  group_id * group_size
+//0*2 = 2 1*2 = 2 2*2` 
 
+kernel void fft_k(global float2* input, global float2 *output,int length,int iter){
+	const int gid = get_global_id(0);
+	if (gid >= length/2) return;
+	int logLength = log2((float)length);
+	
+	//butterfly group_size
+	const int b_size = 1 << iter;
+	//stride to pick the odd term (1,2,4,8....)
+	const int stride = 1 << (iter-1);
+	
+	//Number of group
+	const int n_group = length >> iter;
+
+	const int base_offset = gid & (n_group -1);
+	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
+	const int group_id = gid >> n_group;
+	//0,1,2,3 = [0,1,2,3] = 0;
+	const int id = (gid / stride) * b_size + (gid%stride);
+	const int id_strided = id + stride;
+
+	//const int id = generateBaseIndex(gid,iter -1,logLength);
+
+	//const int id_strided = (id_corrected + stride) & ~(~0u << logLength);
+	const int index_permutated = generatePermutation(id,logLength);
+	const int index_permutated_strided= generatePermutation(id_strided,logLength);
+
+
+	printf("[%d] gid: %d id: (%d,%d) index_permutated: (%d,%d) \n",iter,gid,id,id_strided,index_permutated,index_permutated_strided);
+
+	const float2 odd = input[index_permutated];
+	const float2 even = input[index_permutated_strided];
+	const int wj = 
+	const float angle = -2 * M_PI * index_permutated / length;
+	float2 wj;
+	wj.x = cos(angle);
+	wj.y = sin(angle);
+
+	printf("WJ: (%f %f)\n",wj.x,wj.y);
+
+
+	wj = cmult(wj,odd);
+	output[id] = even  + wj;
+	output[id + stride] = even - wj;		
+}
+//[0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15]
+//[0,4,2,6,1,5,3,7,8,12,10,14,9,13,11,15]
+int generateBaseIndex(const int gid,const int s,const int logLength){
+	return (gid >> s) | (gid << (logLength - s));
+}

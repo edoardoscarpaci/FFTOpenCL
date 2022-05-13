@@ -134,7 +134,7 @@ cl_event bitReversalInit(cl_command_queue q, cl_kernel k, size_t preferred_multi
 
 
 cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init,
-	cl_mem input,cl_mem output, cl_int nels)
+	cl_mem input,cl_mem output, cl_int nels,int iter)
 {
 	cl_int err;
 		err = clSetKernelArg(k, 0, sizeof(input), &input);
@@ -147,8 +147,12 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 	err = clSetKernelArg(k, 2, sizeof(nels), &nels);
 	ocl_check(err, "set kernel arg 2 for ftt");
 
+	err = clSetKernelArg(k, 3, sizeof(int),&iter );
+	ocl_check(err, "set kernel arg 2 for ftt");
 
-	size_t gws[] = { round_mul_up(nels, preferred_multiple_init) };
+
+	size_t gws[] = { round_mul_up(nels/2, preferred_multiple_init) };
+	printf("gws %d\n",gws[0]);
 	cl_event fft_gpu_evt;
 	err = clEnqueueNDRangeKernel(q, k,
 		1, NULL, gws, NULL,
@@ -197,8 +201,8 @@ int main(int argc, char *argv[])
 	cl_program prog = create_program("bitPermutation.ocl", ctx, d);
 
 	cl_int err;
-	cl_kernel init_bit_reversal = clCreateKernel(prog, "fft_1", &err);
-	ocl_check(err, "create kernel fft_1");
+	cl_kernel init_bit_reversal = clCreateKernel(prog, "fft_k", &err);
+	ocl_check(err, "create kernel fft_k");
 
 
 	cl_mem input = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, memsize, samples_float, &err);
@@ -212,12 +216,15 @@ int main(int argc, char *argv[])
 	clGetKernelWorkGroupInfo(init_bit_reversal, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
 		sizeof(preferred_multiple_init), &preferred_multiple_init, NULL);
 
-
-
-	cl_event init_evt = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels);
+	cl_event init_evt;
+	for(int i=1;i<=log2(nels);i++){
+		init_evt = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels,i);
+		cl_mem tmp = input;
+		input = output;
+		output = tmp;
+	}
 	cl_event read_evt;
 
-	std::cout <<"After fftgpu Here " << std::endl;
 
 
 	float* h_array = (float*)clEnqueueMapBuffer(que, output, CL_TRUE, CL_MAP_READ,
@@ -226,12 +233,9 @@ int main(int argc, char *argv[])
 		&err);
 	ocl_check(err, "map buffer");
 	
-	
-
 
 	std::vector<std::complex<float>> A = fft.computeFFT(samples);
 
-	std::cout <<"After fft Here " << std::endl;
 
 
 	verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
@@ -241,7 +245,7 @@ int main(int argc, char *argv[])
 	printf("init: %gms, %gGB/s\n", runtime_init, 1.0e-6*memsize/runtime_init);
 	printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
 	
-	timeFunctionfft(samples);
+	//timeFunctionfft(samples);
 
 
 	cl_event unmap_evt;
