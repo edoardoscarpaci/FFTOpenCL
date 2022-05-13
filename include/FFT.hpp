@@ -5,7 +5,7 @@
 class FFT{
 
 private:
-	void fft(std::complex<float>* A, size_t N);
+	void fft(std::complex<float>* A, size_t N,int iter);
 
 public:
 	FFT();

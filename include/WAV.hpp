@@ -4,6 +4,7 @@
 #include <complex>
 #include <vector>
 #include <string>
+#include <cmath>
 
 class WAV{
 private:
@@ -17,11 +18,12 @@ public:
 	};
 	std::vector<std::complex<float>> getComplexSamples(int channel=0){
 		std::cout <<"Channels: "<<audioFile.getNumChannels() << std::endl;
-		
+		const double multiplier = std::pow(10.0, 6);
 		int numSamples = audioFile.getNumSamplesPerChannel();
 		std::vector<std::complex<float>> samples;
 		for (int i = 0; i < numSamples ; i++){
-			samples.emplace_back(std::complex<float>(audioFile.samples[channel][i],0)); 
+			float sample = std::ceil(audioFile.samples[channel][i] * multiplier) /multiplier; 
+			samples.emplace_back(std::complex<float>(sample,0) *1.f); 
 		}
 
 		return samples;

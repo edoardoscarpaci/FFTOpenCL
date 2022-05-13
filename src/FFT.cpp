@@ -44,8 +44,8 @@ void FFT::fft(std::complex<float>* A, size_t N,int iter){
 		}*/
 	}
 
-	delete even;
-	delete odd;
+	delete[] even;
+	delete[] odd;
 }
 std::vector<std::complex<float>> FFT::computeFFT(std::vector<std::complex<float>> wave){
 	std::vector<std::complex<float>> A = wave;

@@ -107,6 +107,10 @@ kernel void fft_1(global float2* input, global float2 *output,int length){
 //base offset  group_id * group_size
 //0*2 = 2 1*2 = 2 2*2` 
 
+
+
+
+
 kernel void fft_k(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length/2) return;
@@ -126,6 +130,11 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	//0,1,2,3 = [0,1,2,3] = 0;
 	const int id = (gid / stride) * b_size + (gid%stride);
 	const int id_strided = id + stride;
+	const int j = (gid%stride) * n_group;
+
+	/*if(gid ==1)
+		printf("Stride: %d Bsize: %d Ngroup: %d Id: (%d %d) J:%d \n",stride,b_size,n_group,id,id_strided,j);
+	*/
 
 	//const int id = generateBaseIndex(gid,iter -1,logLength);
 
@@ -136,7 +145,6 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	
 	
 	//const int j = ( (gid/n_group) % stride) * n_group ;
-	const int j = (gid%stride) * n_group;
 	//printf("[%d] gid: %d id: (%d,%d) index_permutated: (%d,%d) \n",iter,gid,id,id_strided,index_permutated,index_permutated_strided);
 	//printf("[%d:%d] J: %d\n",iter,gid,j);
 
@@ -171,3 +179,117 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	}*/
 
 }
+
+
+
+
+
+kernel void fft_1(global float2* input, global float2 *output,int length,int iter){
+	const int gid = get_global_id(0);
+	if (gid >= length/2) return;
+	int logLength = log2((float)length);
+	
+	//butterfly group_size
+	const int b_size = round(pown(2.,iter));
+	//stride to pick the odd term (1,2,4,8....)
+	const int stride = round(pown(2.,iter-1));
+	
+	//Number of group
+	const int n_group = length / pown(2.,iter);
+
+	//const int base_offset = gid %n_group;
+
+	
+
+	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
+
+	//const int group_id = gid / pown(2.,n_group);
+	//0,1,2,3 = [0,1,2,3] = 0;
+
+	const int id = (gid / stride) * b_size + (gid%stride);
+	const int id_strided = id + stride;
+	const int j = (gid%stride) * n_group;
+
+
+	/*if(gid ==1)
+		printf("Stride: %d Bsize: %d Ngroup: %d Id: (%d %d) J:%d \n",stride,b_size,n_group,id,id_strided,j);
+	*/
+	const int index_permutated = generatePermutation(id,logLength);
+	const int index_permutated_strided= generatePermutation(id_strided,logLength);
+	
+
+	const float2 even = input[index_permutated];
+	const float2 odd = input[index_permutated_strided];
+	const float angle = -2 * M_PI * j / length;
+	float2 wj;
+	wj.x = cos(angle);
+	wj.y = sin(angle);
+
+
+	const float2 wj_odd = cmult(wj,odd);
+
+	const float2 even_output =  even  + wj_odd;
+	const float2 odd_output =  even  - wj_odd;
+	
+	if(iter == logLength){
+		output[id] = even_output;
+		output[id_strided] = even - wj_odd;
+	}
+	else{
+		output[index_permutated] = even_output;
+		output[index_permutated_strided] = even - wj_odd;
+	}
+
+}
+
+kernel void fft_2(global float2* input, global float2 *output,int length,int iter){
+	const int gid = get_global_id(0);
+	if (gid >= length >> 1) return;
+	int logLength = log2((float)length);
+	
+	//butterfly group_size
+	const int b_size = 1 << iter;
+	//stride to pick the odd term (1,2,4,8....)
+	const int stride = 1 << (iter-1);
+	
+	//Number of group
+	const int n_group = length >> iter;
+
+	const int base_offset = gid & (n_group -1);
+	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
+	const int group_id = gid >> n_group;
+	//0,1,2,3 = [0,1,2,3] = 0;
+	const int id = (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
+	const int id_strided = id + stride;
+
+	const int index_permutated = generatePermutation(id,logLength);
+	const int index_permutated_strided= generatePermutation(id_strided,logLength);
+	
+	const int j = (gid & (stride -1) ) * n_group;
+
+	const float2 even = input[index_permutated];
+	const float2 odd = input[index_permutated_strided];
+	const float angle = -2 * M_PI * j / length;
+	float2 wj;
+	wj.x = cos(angle);
+	wj.y = sin(angle);
+
+	const float2 wj_odd = cmult(wj,odd);
+
+	const float2 even_output =  even  + wj_odd;
+	const float2 odd_output =  even  - wj_odd;
+	
+	if(iter == logLength){
+		output[id] = even_output;
+		output[id_strided] = even - wj_odd;
+	}
+	else{
+		output[index_permutated] = even_output;
+		output[index_permutated_strided] = even - wj_odd;
+	}
+	
+	
+}
+
+
+

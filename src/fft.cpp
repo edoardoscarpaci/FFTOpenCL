@@ -10,6 +10,8 @@
 #include "WAV.hpp"
 #include <iomanip>
 
+#include <fftw3.h>
+
 #include <functional>
 #include <chrono>
 
@@ -67,6 +69,30 @@ double timeFunctionfft(std::vector<std::complex<float>> wave){
 	return ms_double.count();
 }
 
+double timeFunctionfftwf(fftwf_plan plan,int memsize){
+	using std::chrono::high_resolution_clock;
+    using std::chrono::duration_cast;
+    using std::chrono::duration;
+    using std::chrono::milliseconds;
+	FFT fft = FFT();
+
+
+	auto t1 = high_resolution_clock::now();
+	fftwf_execute(plan);
+    auto t2 = high_resolution_clock::now();
+
+    /* Getting number of milliseconds as an integer. */
+    //auto ms_int = duration_cast<milliseconds>(t2 - t1);
+
+    /* Getting number of milliseconds as a double. */
+    duration<double, std::milli> ms_double = t2 - t1;
+
+    //std::cout << ms_int.count() << "ms\n";
+    std::cout <<"FFTW CPU function: " <<ms_double.count() << "ms ," <<1.0e-6*memsize/ms_double.count()<<"GB/s"<<std::endl;
+	return ms_double.count();
+}
+
+
 uint32_t* bitReversal(uint32_t lenght){
 	uint32_t t = log2(lenght);
 	const unsigned half_n = 1 << (t-1);
@@ -81,7 +107,6 @@ uint32_t* bitReversal(uint32_t lenght){
 	}
 	return result;
 }
-
 void verifyBitReversal(uint32_t* x, uint32_t N){
 	uint32_t* trueBitReversal = bitReversal(N);
 	for(int i=0; i<N;i++){
@@ -100,6 +125,14 @@ float* complexToFloat(std::complex<float>* x,int N){
 	}
 
 	return out;
+}
+
+
+void fillcomplexfftw(float* a , fftwf_complex* b,int N){
+	for(int i=0;i<N;i++){
+		b[i][0] = a[i*2];
+		b[i][1] = a[i*2+1];
+	}
 }
 template <class T>
 void verifyArray(T* x ,T* y,int N){
@@ -132,17 +165,7 @@ int generatePermutation(int index,int logLength){
 	}
 	return b;
 }
-/*
-float* reorderArray(float* A,int N){
-	const int logLenght = log2(N);
-	float* B = new float[N];
-	for(int i=0;i<N;i++){		
-		B[i*2] = A[generatePermutation(i*2,logLenght)];
-		B[i*2+1] = A[generatePermutation(strided_id,logLenght)+1];
-	}
 
-	return B;
-}*/
 void print16Array(int * x , int N){
 	for(int i=0; i<16;i++)
 		std::cout << x[i] <<std::endl;
@@ -173,7 +196,7 @@ cl_event bitReversalInit(cl_command_queue q, cl_kernel k, size_t preferred_multi
 
 
 cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init,
-	cl_mem input,cl_mem output, cl_int nels,int iter)
+	cl_mem input,cl_mem output, cl_int nels, int iter, cl_int num_events_to_wait, cl_event *to_wait)
 {
 	cl_int err;
 		err = clSetKernelArg(k, 0, sizeof(input), &input);
@@ -193,10 +216,16 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 	size_t gws[] = { round_mul_up(nels/2, preferred_multiple_init) };
 	//printf("gws %d\n",gws[0]);
 	cl_event fft_gpu_evt;
-	err = clEnqueueNDRangeKernel(q, k,
-		1, NULL, gws, NULL,
-		0, NULL, &fft_gpu_evt);
-	ocl_check(err, "launch kernel init_bit_reversal");
+	
+	if(num_events_to_wait > 0)
+		err = clEnqueueNDRangeKernel(q, k,
+			1, NULL, gws, NULL,
+			num_events_to_wait, to_wait, &fft_gpu_evt );
+	else
+		err = clEnqueueNDRangeKernel(q, k,
+			1, NULL, gws, NULL,
+			0, NULL, &fft_gpu_evt );
+	ocl_check(err, "launch kernel fft_k");
 	return fft_gpu_evt;
 }
 
@@ -204,11 +233,12 @@ int main(int argc, char *argv[])
 {
 	if (argc < 2) error("wav file path and cut ");
 	
-	//const int nels = atoi(argv[1]);
 	const std::string path = argv[1];
+	const int cut = atoi(argv[2]);
+	const std::string kernel = argv[3];
+
 	//const size_t memsize = nels*sizeof(float)*2;
 
-	const int cut = atoi(argv[2]);
 
 	FFT fft = FFT();
 	WAV wavFile = WAV(path);
@@ -217,7 +247,7 @@ int main(int argc, char *argv[])
 	std::cout <<"Samples Size before resize: "<< samples.size() <<std::endl;
 	
 	int prev = pow(2, floor(log(samples.size())/log(2)));
-	if(cut < samples.size()){
+	if((size_t)cut < samples.size()){
 		prev = cut;
 	}
 	samples.resize(prev);
@@ -228,7 +258,7 @@ int main(int argc, char *argv[])
 	
 	float* samples_float = complexToFloat(samples.data(),samples.size());
 
-	const int memsize = nels * 2 * sizeof(double);	
+	const int memsize = nels * 2 * sizeof(float);	
 	std::cout <<"Memsize: "<< memsize <<std::endl;
 	
 
@@ -240,46 +270,39 @@ int main(int argc, char *argv[])
 	cl_program prog = create_program("bitPermutation.ocl", ctx, d);
 
 	cl_int err;
-	cl_kernel init_bit_reversal = clCreateKernel(prog, "fft_k", &err);
+	cl_kernel init_bit_reversal = clCreateKernel(prog, kernel.c_str(), &err);
 	ocl_check(err, "create kernel fft_k");
 
 
-	cl_mem input = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, memsize, samples_float, &err);
+	cl_mem input = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, memsize, samples_float, &err);
 	ocl_check(err, "create input array");
 	
-	cl_mem output = clCreateBuffer(ctx, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR, memsize, NULL, &err);
+	cl_mem output = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, memsize, NULL, &err);
 	ocl_check(err, "create output array");
 
 
 	size_t preferred_multiple_init;
 	clGetKernelWorkGroupInfo(init_bit_reversal, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
 		sizeof(preferred_multiple_init), &preferred_multiple_init, NULL);
-
-	cl_event init_evt;
-	for(int i=1;i<=log2(nels);i++){
-		init_evt = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels,i);
+	const int iter = log2(nels);
+	cl_event init_evt[iter];
+	for(int i=1;i<=iter;i++){
+		init_evt[i-1] = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels,i, i-1,init_evt);
 		cl_mem tmp = input;
 		input = output;
 		output = tmp;
 	}
-
 	cl_mem tmp = input;
 	input = output;
 	output = tmp;
 	
 	cl_event read_evt;
-
-
 	float* h_array = (float*)clEnqueueMapBuffer(que, output, CL_TRUE, CL_MAP_READ,
 		0, memsize,
-		1, &init_evt, &read_evt,
+		1, init_evt+(iter-1), &read_evt,
 		&err);
 	ocl_check(err, "map buffer");
-	
-
-	//float* reorderOutput = reorderArray(h_array,nels);
-	
-
+		
 	std::vector<std::complex<float>> A = fft.computeFFT(samples);
 	
 	/*for(int i=0;i<A.size();i++){
@@ -291,17 +314,32 @@ int main(int argc, char *argv[])
 
 	verifyArrayFloat(h_array,complexToFloat(A.data(),A.size()),nels);
 
-	double runtime_init = runtime_ms(init_evt);
+	double runtime_init = total_runtime_ms(init_evt[0],init_evt[iter-1]);
 	double runtime_read = runtime_ms(read_evt);
 
-	printf("init: %gms, %gGB/s\n", runtime_init, 1.0e-6*memsize/runtime_init);
+	for (int pass = 0; pass < iter; ++pass) {
+		double runtime_pass = runtime_ms(init_evt[pass]);
+		printf("fft_pass_%d: %gms, %gGB/s, %gGE/s\n",pass,runtime_pass,1.0e-6*memsize/runtime_pass,1.0e-6*2*nels/runtime_pass);
+	} 
+
+	printf("fft: %gms, %gGB/s\n", runtime_init, 1.0e-6*memsize/runtime_init);
 	printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
 
 	printf("combined: %gms, %gGB/s\n", runtime_read+runtime_init, 1.0e-6*memsize/(runtime_read+runtime_init));
-
 	
+	fftwf_complex *in = new fftwf_complex[nels];
+	fftwf_complex *out = new fftwf_complex[nels];
+	fillcomplexfftw(samples_float,in,nels);
+
+	fftwf_plan  plan_fftw = fftwf_plan_dft_1d(nels, in ,out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+
 	double cpu_time = timeFunctionfft(samples);
-	printf("Speedup: %f\n" ,cpu_time / (runtime_init+runtime_read));
+	double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
+
+	printf("Speedup CPU: %f \n" ,cpu_time / (runtime_init+runtime_read));
+	printf("Speedup FFTW: %f \n" ,fftw_time / (runtime_init+runtime_read));
+
 
 	cl_event unmap_evt;
 	err = clEnqueueUnmapMemObject(que, output, h_array,
@@ -313,10 +351,12 @@ int main(int argc, char *argv[])
 
 
 	clReleaseEvent(read_evt);
-	clReleaseEvent(init_evt);
+	for(int i=0;i<iter;i++)
+		clReleaseEvent(init_evt[i]);
 	clReleaseKernel(init_bit_reversal);
 	clReleaseMemObject(output);
 	clReleaseMemObject(input);
-	
+	delete[] in;
+	delete[] out;
 
 }

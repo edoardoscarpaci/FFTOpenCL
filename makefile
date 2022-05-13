@@ -1,9 +1,9 @@
 BUILDDIR = build
 CC = g++
 CFLAGS  = -g -Wall
-LDLIBS += -lOpenCL
+LDLIBS += -lOpenCL -lfftw3f
 SOURCEDIR = src
-HEADERDIR = -Iinclude -Isrc
+HEADERDIR = -Iinclude -Isrc 
 PROG = fft
 LD = g++
 
@@ -20,7 +20,7 @@ $(BUILDDIR)/$(PROG): $(OBJECTS)
 	$(LD) $(LDFLAGS)  $(OBJECTS)  -o $(BUILDDIR)/$(PROG) $(LDLIBS)
 
 $(BUILDDIR)/%.o : $(SOURCEDIR)/%.cpp
-	$(CC) $(CFLAGS) $(LDLIBS) $(HEADERDIR) -c $< -o $@
+	$(CC) $(CFLAGS)  $(HEADERDIR) -c $< -o $@ $(LDLIBS)
 
 
 
