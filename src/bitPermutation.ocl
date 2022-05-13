@@ -42,7 +42,7 @@ inline float2 cmult(float2 a, float2 b){
     return (float2)( a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
-
+/*
 kernel void fft_1(global float2* input, global float2 *output,int length){
 	const int id = get_global_id(0);
 	if (id >= length) return;
@@ -101,7 +101,7 @@ kernel void fft_1(global float2* input, global float2 *output,int length){
 		}
 	}
 	
-}
+}*/
 //[0] = 0 , [1] = 1, [2] = 2 , [3] = 3
 // group size = 2
 //base offset  group_id * group_size
@@ -132,27 +132,42 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	//const int id_strided = (id_corrected + stride) & ~(~0u << logLength);
 	const int index_permutated = generatePermutation(id,logLength);
 	const int index_permutated_strided= generatePermutation(id_strided,logLength);
+	
+	
+	
+	//const int j = ( (gid/n_group) % stride) * n_group ;
+	const int j = (gid%stride) * n_group;
+	//printf("[%d] gid: %d id: (%d,%d) index_permutated: (%d,%d) \n",iter,gid,id,id_strided,index_permutated,index_permutated_strided);
+	//printf("[%d:%d] J: %d\n",iter,gid,j);
 
-
-	printf("[%d] gid: %d id: (%d,%d) index_permutated: (%d,%d) \n",iter,gid,id,id_strided,index_permutated,index_permutated_strided);
-
-	const float2 odd = input[index_permutated];
-	const float2 even = input[index_permutated_strided];
-	const int wj = 
-	const float angle = -2 * M_PI * index_permutated / length;
+	const float2 even = input[index_permutated];
+	const float2 odd = input[index_permutated_strided];
+	const float angle = -2 * M_PI * j / length;
 	float2 wj;
 	wj.x = cos(angle);
 	wj.y = sin(angle);
 
-	printf("WJ: (%f %f)\n",wj.x,wj.y);
+	//printf("W%d: (%f %f)\n",j, wj.x,wj.y);
 
 
-	wj = cmult(wj,odd);
-	output[id] = even  + wj;
-	output[id + stride] = even - wj;		
-}
-//[0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15]
-//[0,4,2,6,1,5,3,7,8,12,10,14,9,13,11,15]
-int generateBaseIndex(const int gid,const int s,const int logLength){
-	return (gid >> s) | (gid << (logLength - s));
+	const float2 wj_odd = cmult(wj,odd);
+
+	//printf("W%d_odd: (%f %f)\n",j, wj.x,wj.y);
+	const float2 even_output =  even  + wj_odd;
+	const float2 odd_output =  even  - wj_odd;
+	
+	if(iter == logLength){
+		output[id] = even_output;
+		output[id_strided] = even - wj_odd;
+	}
+	else{
+		output[index_permutated] = even_output;
+		output[index_permutated_strided] = even - wj_odd;
+	}
+	
+	/*if(iter==1 || iter==2 || true){
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",index_permutated,even.x,even.y,index_permutated_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
+	}*/
+
 }

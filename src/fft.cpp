@@ -8,6 +8,7 @@
 #include <math.h>
 #include "FFT.hpp"
 #include "WAV.hpp"
+#include <iomanip>
 
 #include <functional>
 #include <chrono>
@@ -16,6 +17,11 @@ void error(const char * msg)
 {
 	fprintf(stderr, "%s\n", msg);
 	exit(1);
+}
+
+bool cmpf(float A, float B, float epsilon = 0.01f)
+{
+    return (fabs(A - B) < epsilon);
 }
 
 void timeFunction(std::function<uint32_t*(uint32_t)> f,uint32_t N){
@@ -38,7 +44,7 @@ void timeFunction(std::function<uint32_t*(uint32_t)> f,uint32_t N){
     std::cout <<"CPU function: " <<ms_double.count() << "ms ," <<1.0e-6*N*sizeof(int)/ms_double.count()<<"GB/s"<<std::endl;
 } 
 
-void timeFunctionfft(std::vector<std::complex<float>> wave){
+double timeFunctionfft(std::vector<std::complex<float>> wave){
 	using std::chrono::high_resolution_clock;
     using std::chrono::duration_cast;
     using std::chrono::duration;
@@ -58,6 +64,7 @@ void timeFunctionfft(std::vector<std::complex<float>> wave){
 
     //std::cout << ms_int.count() << "ms\n";
     std::cout <<"CPU function: " <<ms_double.count() << "ms ," <<1.0e-6*wave.size()*2*sizeof(int)/ms_double.count()<<"GB/s"<<std::endl;
+	return ms_double.count();
 }
 
 uint32_t* bitReversal(uint32_t lenght){
@@ -104,6 +111,38 @@ void verifyArray(T* x ,T* y,int N){
 	}
 }
 
+
+void verifyArrayFloat(float* x ,float* y,int N){
+	for (int i=0;i<N;i++){
+		if(!cmpf(x[i],y[i])){
+			std::cout<<"Different value at index {"<<i<< "} with value x: " << x[i] << " y: " << y[i]<<std::endl;
+			return;
+		}
+	}
+}
+
+int generatePermutation(int index,int logLength){
+	int a = index;
+	int b = 0;
+	int j = 0;	
+
+	while(j++ < logLength){
+		b = (b << 1)| (a & 1);
+		a >>= 1;
+	}
+	return b;
+}
+/*
+float* reorderArray(float* A,int N){
+	const int logLenght = log2(N);
+	float* B = new float[N];
+	for(int i=0;i<N;i++){		
+		B[i*2] = A[generatePermutation(i*2,logLenght)];
+		B[i*2+1] = A[generatePermutation(strided_id,logLenght)+1];
+	}
+
+	return B;
+}*/
 void print16Array(int * x , int N){
 	for(int i=0; i<16;i++)
 		std::cout << x[i] <<std::endl;
@@ -152,7 +191,7 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 
 
 	size_t gws[] = { round_mul_up(nels/2, preferred_multiple_init) };
-	printf("gws %d\n",gws[0]);
+	//printf("gws %d\n",gws[0]);
 	cl_event fft_gpu_evt;
 	err = clEnqueueNDRangeKernel(q, k,
 		1, NULL, gws, NULL,
@@ -189,7 +228,7 @@ int main(int argc, char *argv[])
 	
 	float* samples_float = complexToFloat(samples.data(),samples.size());
 
-	const int memsize = nels * 2 * sizeof(float);	
+	const int memsize = nels * 2 * sizeof(double);	
 	std::cout <<"Memsize: "<< memsize <<std::endl;
 	
 
@@ -223,8 +262,12 @@ int main(int argc, char *argv[])
 		input = output;
 		output = tmp;
 	}
-	cl_event read_evt;
 
+	cl_mem tmp = input;
+	input = output;
+	output = tmp;
+	
+	cl_event read_evt;
 
 
 	float* h_array = (float*)clEnqueueMapBuffer(que, output, CL_TRUE, CL_MAP_READ,
@@ -234,19 +277,31 @@ int main(int argc, char *argv[])
 	ocl_check(err, "map buffer");
 	
 
+	//float* reorderOutput = reorderArray(h_array,nels);
+	
+
 	std::vector<std::complex<float>> A = fft.computeFFT(samples);
+	
+	/*for(int i=0;i<A.size();i++){
+		printf("[%d] cpu:(%f,%f) gpu:(%f,%f)\n",i,A[i].real(),A[i].imag(),h_array[i*2],h_array[i*2+1]);
+	}*/
 
 
+	//verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
 
-	verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
+	verifyArrayFloat(h_array,complexToFloat(A.data(),A.size()),nels);
+
 	double runtime_init = runtime_ms(init_evt);
 	double runtime_read = runtime_ms(read_evt);
 
 	printf("init: %gms, %gGB/s\n", runtime_init, 1.0e-6*memsize/runtime_init);
 	printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
-	
-	//timeFunctionfft(samples);
 
+	printf("combined: %gms, %gGB/s\n", runtime_read+runtime_init, 1.0e-6*memsize/(runtime_read+runtime_init));
+
+	
+	double cpu_time = timeFunctionfft(samples);
+	printf("Speedup: %f\n" ,cpu_time / (runtime_init+runtime_read));
 
 	cl_event unmap_evt;
 	err = clEnqueueUnmapMemObject(que, output, h_array,
@@ -256,7 +311,7 @@ int main(int argc, char *argv[])
 	err = clWaitForEvents(1, &unmap_evt);
 	ocl_check(err, "wait for unmap");
 
-	
+
 	clReleaseEvent(read_evt);
 	clReleaseEvent(init_evt);
 	clReleaseKernel(init_bit_reversal);

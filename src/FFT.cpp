@@ -4,9 +4,8 @@
 FFT::FFT(){
 }
 
-void FFT::fft(std::complex<float>* A, size_t N){
+void FFT::fft(std::complex<float>* A, size_t N,int iter){
 	//std::cout << "Calling fft: " << N <<std::endl; 
-
 	if (N<=1) return;
 
 
@@ -22,16 +21,27 @@ void FFT::fft(std::complex<float>* A, size_t N){
 	}
 	//std::cout << "Before fft divide N: " << N <<std::endl; 
 
-	fft(even,N/2);
-	fft(odd,N/2);
+	fft(even,N/2,iter-1);
+	fft(odd,N/2,iter-1);
+	//std::cout<< "Iter: " << iter<<std::endl;
+	for(int i=0;i<N/2;i++){	
+		std::complex<float> t = std::exp(std::complex<float>(0, -2 * M_PI * i / N));
+		
+		if(t.real() > -0.000001 && t.real() < 0 ){
+			//std::cout << "Changing t: " << t <<std::endl;
+			t = std::complex<float>(0,t.imag());
+		}
+		std::complex<float> t_odd  = t * odd[i];
+		//std::cout << "t_odd: " << t <<std::endl;
 	
-	for(int i=0;i<N/2;i++){
-		std::complex<float> t = exp(std::complex<float>(0, -2 * M_PI * i / N));
-		//std::cout<<"Even:" << even[i]<<" Odd:"<< odd[i] <<std::endl; 
-		//std::cout << "t: " << t <<std::endl; 
-		t *= odd[i];
-		A[i] = even[i]  + t;
-		A[i + N/2] = even[i] - t;
+
+		A[i] = even[i]  + t_odd;
+		A[i + N/2] = even[i] - t_odd;
+		
+		/*if(iter == 3){
+			std::cout <<"["<<i<<"] "<<"Even: " << even[i] << " Odd: " << odd[i] <<" T: "<< t<<" T_odd:"<<t_odd<<std::endl;
+			//std::cout <<"Results:["<<i<<"] "<<"Even: " << even[i]+t_odd << " Odd: " << even[i] - t_odd <<std::endl;
+		}*/
 	}
 
 	delete even;
@@ -44,6 +54,6 @@ std::vector<std::complex<float>> FFT::computeFFT(std::vector<std::complex<float>
 		A[i] *= 1;
 	}*/
 
-	fft(A.data(),A.size());
+	fft(A.data(),A.size(),log2(A.size()));
 	return A;
 }
