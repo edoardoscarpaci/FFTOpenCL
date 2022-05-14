@@ -1,22 +1,3 @@
-kernel void bitPReversal(global int* output, int length){
-	const int id  = get_global_id(0);
-	if (id >= length) return;
-	
-	int a = id;
-	int b = 0;
-	int j = 0;
-
-	int t = log2((float)length);
-
-	while(j++ < t){
-		b = (b << 1)| (a & 1);
-		a >>= 1;
-	}
-	
-	output[id] = b;
-}
-
-
 kernel void init_vec_k(global int *array, int nels)
 {
 	const int i = get_global_id(0);
@@ -36,81 +17,40 @@ int generatePermutation(int index,int logLength){
 	return b;
 }
 
+int calculateJ(int gid,int lenght, int iter){
+	const int stride = 1 << (iter-1);
+	const int n_group = lenght >> iter;
+
+	return (gid & (stride -1) ) * n_group;
+}
+
+int calculateIndex(int gid,int lenght, int iter){
+	const int b_size = 1 << iter;
+
+	const int stride = 1 << (iter-1);
+	
+	const int n_group = lenght >> iter;
+	
+	const int group_id = gid >> n_group;
+
+	return (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
+}
+
 
 
 inline float2 cmult(float2 a, float2 b){
     return (float2)( a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
 
-/*
-kernel void fft_1(global float2* input, global float2 *output,int length){
-	const int id = get_global_id(0);
-	if (id >= length) return;
-	int logLength = log2((float)length);
-	
-	const int index_permutated = generatePermutation(id,logLength);
-	int n_half =0;
-	int mask =0;
-	int vec_n =0;
+kernel void bitReverse(global float2* input,global float2* output,int logLength){
+	const int gid = get_global_id(0);
+	const int gid_permutated = generatePermutation(gid,logLength);
+	if(gid >= 1<<logLength) return;
 
-	if(id <  8){
-		printf("index : %d , index permutated: %d  permutated:(%f,%f)\n",id,index_permutated,input[index_permutated].x,input[index_permutated].y);
-		printf("input : (%f , %f)\n\n",input[id].x,input[id].y);
+	output[gid] = input[gid_permutated];
+}
 
-	}
-
-	for(int i=0;i<logLength;i++){
-		barrier(CLK_GLOBAL_MEM_FENCE);
-		mask = length >> (i+1);
-		vec_n = 2 << i;
-
-		int half_n = vec_n/2;
-		int id_strided = id*vec_n;
-		
-		if(id == 0){
-			//printf("mask : %d , vec_n: %d, half_n %d\n",mask,vec_n,half_n);
-		}
-
-		for(int j=0;j<half_n;j++){	
-			const float angle = -2 * M_PI * j / length;
-			const int id_even = id_strided+j*2;
-			const int id_odd = id_strided+j*2 +1;
-			const int idx_odd = generatePermutation(id_odd, logLength);
-			const int idx_even = generatePermutation(id_even, logLength);
-			
-			if(id == 0){
-				//printf("[%d] index_even : %d , index_odd %d ,idx_even_perm %d idx_odd_perm: %d  id_strided: %d\n",j,id_even,id_odd,idx_even,idx_odd,id_strided);
-			}
-
-			const float2 odd = input[idx_odd];
-			const float2 even = input[idx_even];
-			
-			if(id == 0){
-				printf("even : (%f , %f) ,odd: (%f , %f)\n",even.x,even.y,odd.x,odd.y);
-			}
-			float2 wj;
-			wj.x = cos(angle);
-			wj.y = sin(angle);	
-			
-			if(id ==0){
-				//printf("WJ: x : %f y: %f\n",wj.x,wj.y);
-			}
-			wj = cmult(wj,odd);
-			output[id_strided] = even  + wj;
-			output[id_strided + half_n] = even - wj;	
-		}
-	}
-	
-}*/
-//[0] = 0 , [1] = 1, [2] = 2 , [3] = 3
-// group size = 2
-//base offset  group_id * group_size
-//0*2 = 2 1*2 = 2 2*2` 
-
-
-
-
-
+//working prototype
 kernel void fft_k(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length/2) return;
@@ -147,6 +87,7 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	//const int j = ( (gid/n_group) % stride) * n_group ;
 	//printf("[%d] gid: %d id: (%d,%d) index_permutated: (%d,%d) \n",iter,gid,id,id_strided,index_permutated,index_permutated_strided);
 	//printf("[%d:%d] J: %d\n",iter,gid,j);
+	//printf("[%d] gid: %d id: (%d,%d)\n",iter,gid,id,id_strided);
 
 	const float2 even = input[index_permutated];
 	const float2 odd = input[index_permutated_strided];
@@ -173,17 +114,14 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 		output[index_permutated_strided] = even - wj_odd;
 	}
 	
-	/*if(iter==1 || iter==2 || true){
+	/*if(iter==1){
 		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",index_permutated,even.x,even.y,index_permutated_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
 		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
 	}*/
 
 }
 
-
-
-
-
+//naive implementation
 kernel void fft_1(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length/2) return;
@@ -242,6 +180,7 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 
 }
 
+//optimization mod and pow using bit manipulation
 kernel void fft_2(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length >> 1) return;
@@ -287,9 +226,123 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 		output[index_permutated] = even_output;
 		output[index_permutated_strided] = even - wj_odd;
 	}
-	
-	
+
+	/*if(iter==1){
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even.x,even.y,id_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
+	}*/
+
 }
 
 
+kernel void fft_3(global float2* input, global float2 *output,int length,int iter){
+	const int gid = get_global_id(0);
+	if (gid >= (length >> 1)) return;
 
+	//butterfly group_size
+	const int b_size = 1 << iter;
+	//stride to pick the odd term (1,2,4,8....)
+	const int stride = 1 << (iter-1);
+	
+	//Number of group
+	const int n_group = length >> iter;
+
+	const int base_offset = gid & (n_group -1);
+	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
+	const int group_id = gid >> n_group;
+	//0,1,2,3 = [0,1,2,3] = 0;
+	const int id = (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
+	const int id_strided = id + stride;
+
+	const int j = (gid & (stride -1) ) * n_group;
+
+	const float2 even = input[id];
+	const float2 odd = input[id_strided];
+
+	const float angle = -2 * M_PI * j / length;
+	float2 wj;
+	wj.x = cos(angle);
+	wj.y = sin(angle);
+
+	const float2 wj_odd = cmult(wj,odd);
+
+	const float2 even_output =  even  + wj_odd;
+	const float2 odd_output =  even  - wj_odd;
+	
+	output[id] = even_output;
+	output[id_strided] = even - wj_odd;
+
+
+	/*if(gid==1){
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even.x,even.y,id_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
+	}*/
+}
+
+/*
+
+kernel void fft_4(global float2* input, global float2 *output,int length,int iter){
+	const int gid = get_global_id(0);
+	if (gid >= (length >> 1)) return;
+
+	const int id = gid;
+	const int id_strided = gid+1
+
+	const float2 even = input[id];
+	const float2 odd = input[id_strided];
+
+	const float angle = -2 * M_PI * j / length;
+	float2 wj;
+	wj.x = cos(angle);
+	wj.y = sin(angle);
+
+	const float2 wj_odd = cmult(wj,odd);
+
+	const float2 even_output =  even  + wj_odd;
+	const float2 odd_output =  even  - wj_odd;
+
+	output[id] = even_output;
+	output[id_strided] = even - wj_odd;
+}
+
+
+/*
+kernel void fft_4(global float2* input,int length,int logLength){
+	const int gid = get_global_id(0);
+	if (gid >= (length >> 1)) return;
+	//printf("Input[%d]: (%f,%f)\n",gid,input[gid].x,input[gid].y);
+	if(gid==0){
+		printf("Local Sizee:%d \n",get_local_size(0));
+	}
+	for(int i=1;i<=logLength;i++){
+
+		const int stride = 1 << (i-1);
+
+		const int id = calculateIndex(gid,length,i);
+		const int id_strided = id + stride;
+		const int j = calculateJ(gid,length,i);
+		
+		barrier(CLK_GLOBAL_MEM_FENCE);
+		const float2 even = input[id];
+		const float2 odd = input[id_strided];
+		barrier(CLK_GLOBAL_MEM_FENCE);
+
+		const float angle = -2 * M_PI * j / length;
+		float2 wj;
+		wj.x = cos(angle);
+		wj.y = sin(angle);
+
+		const float2 wj_odd = cmult(wj,odd);
+
+		const float2 even_output =  even  + wj_odd;
+		const float2 odd_output =  even  - wj_odd;
+		
+		barrier(CLK_GLOBAL_MEM_FENCE);
+		input[id] = even_output;
+		input[id_strided] = odd_output;
+		barrier(CLK_GLOBAL_MEM_FENCE);
+
+	}
+}
+
+*/

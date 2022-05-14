@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <chrono>
+#include "FFTgpu.hpp"
 
 void error(const char * msg)
 {
@@ -171,15 +172,21 @@ void print16Array(int * x , int N){
 		std::cout << x[i] <<std::endl;
 }
 
-cl_event bitReversalInit(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init,
-	cl_mem d_array, cl_int nels)
+
+cl_event bitReverseArray(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init,
+	cl_mem input,cl_mem output, cl_int nels)
 {
 	cl_int err;
-	err = clSetKernelArg(k, 0, sizeof(d_array), &d_array);
-	ocl_check(err, "set kernel arg 0 for init_bit_reversal");
+	err = clSetKernelArg(k, 0, sizeof(input), &input);
+	ocl_check(err, "set kernel arg 0 for bit_reverse_array");
 	
-	err = clSetKernelArg(k, 1, sizeof(nels), &nels);
-	ocl_check(err, "set kernel arg 1 for init_bit_reversal");
+	err = clSetKernelArg(k, 1, sizeof(output), &output);
+	ocl_check(err, "set kernel arg 0 for bit_reverse_array");
+	
+	int logLenght = log2(nels);
+	
+	err = clSetKernelArg(k, 2, sizeof(logLenght), &logLenght);
+	ocl_check(err, "set kernel arg 1 for bit_reverse_array");
 
 	/* Round up to the next multiple of preferred_multiple_init.
 	 * ALTERNATIVE (exercise): split the kernel execution in 
@@ -190,7 +197,7 @@ cl_event bitReversalInit(cl_command_queue q, cl_kernel k, size_t preferred_multi
 	err = clEnqueueNDRangeKernel(q, k,
 		1, NULL, gws, NULL,
 		0, NULL, &init_evt);
-	ocl_check(err, "launch kernel init_bit_reversal");
+	ocl_check(err, "launch kernel bit_reverse_array");
 	return init_evt;
 }
 
@@ -199,7 +206,7 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 	cl_mem input,cl_mem output, cl_int nels, int iter, cl_int num_events_to_wait, cl_event *to_wait)
 {
 	cl_int err;
-		err = clSetKernelArg(k, 0, sizeof(input), &input);
+	err = clSetKernelArg(k, 0, sizeof(input), &input);
 	ocl_check(err, "set kernel arg 0 for fft");
 
 	err = clSetKernelArg(k, 1, sizeof(output), &output);
@@ -210,7 +217,7 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 	ocl_check(err, "set kernel arg 2 for ftt");
 
 	err = clSetKernelArg(k, 3, sizeof(int),&iter );
-	ocl_check(err, "set kernel arg 2 for ftt");
+	ocl_check(err, "set kernel arg 3 for ftt");
 
 
 	size_t gws[] = { round_mul_up(nels/2, preferred_multiple_init) };
@@ -250,17 +257,16 @@ int main(int argc, char *argv[])
 	if((size_t)cut < samples.size()){
 		prev = cut;
 	}
+
 	samples.resize(prev);
 	const int nels = samples.size();
 	
 	std::cout <<"Samples Size Resized: "<< nels <<std::endl;
-
-	
-	float* samples_float = complexToFloat(samples.data(),samples.size());
-
 	const int memsize = nels * 2 * sizeof(float);	
 	std::cout <<"Memsize: "<< memsize <<std::endl;
 	
+	float* samples_float = complexToFloat(samples.data(),samples.size());
+
 
 	/* Initialize OpenCL */
 	cl_platform_id p = select_platform();
@@ -268,7 +274,7 @@ int main(int argc, char *argv[])
 	cl_context ctx = create_context(p, d);
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("bitPermutation.ocl", ctx, d);
-
+/*
 	cl_int err;
 	cl_kernel init_bit_reversal = clCreateKernel(prog, kernel.c_str(), &err);
 	ocl_check(err, "create kernel fft_k");
@@ -285,6 +291,7 @@ int main(int argc, char *argv[])
 	clGetKernelWorkGroupInfo(init_bit_reversal, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
 		sizeof(preferred_multiple_init), &preferred_multiple_init, NULL);
 	const int iter = log2(nels);
+
 	cl_event init_evt[iter];
 	for(int i=1;i<=iter;i++){
 		init_evt[i-1] = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels,i, i-1,init_evt);
@@ -303,17 +310,8 @@ int main(int argc, char *argv[])
 		&err);
 	ocl_check(err, "map buffer");
 		
-	std::vector<std::complex<float>> A = fft.computeFFT(samples);
+
 	
-	/*for(int i=0;i<A.size();i++){
-		printf("[%d] cpu:(%f,%f) gpu:(%f,%f)\n",i,A[i].real(),A[i].imag(),h_array[i*2],h_array[i*2+1]);
-	}*/
-
-
-	//verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
-
-	verifyArrayFloat(h_array,complexToFloat(A.data(),A.size()),nels);
-
 	double runtime_init = total_runtime_ms(init_evt[0],init_evt[iter-1]);
 	double runtime_read = runtime_ms(read_evt);
 
@@ -326,6 +324,34 @@ int main(int argc, char *argv[])
 	printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
 
 	printf("combined: %gms, %gGB/s\n", runtime_read+runtime_init, 1.0e-6*memsize/(runtime_read+runtime_init));
+	*/
+
+
+	//verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
+
+	std::vector<std::complex<float>> A = fft.computeFFT(samples);
+
+	FFTGpu* fft_gpu;
+
+	if(kernel == "fft_1" || kernel== "fft_2"){
+		fft_gpu = new FFTGpu1_2(p,d,ctx,que,prog,kernel);
+	}
+	else if(kernel == "fft_3"){
+		fft_gpu = new FFTGpu3(p,d,ctx,que,prog);
+	}
+	else if(kernel == "fft_4"){
+		//fft_gpu = new FFTGpu4(p,d,ctx,que,prog);
+	}
+	
+	float *h_array = fft_gpu->fft(samples_float,nels);
+	
+		
+	/*for(int i=0;i<A.size();i++){
+		printf("[%d] cpu:(%f,%f) gpu:(%f,%f)\n",i,A[i].real(),A[i].imag(),h_array[i*2],h_array[i*2+1]);
+	}*/
+
+	verifyArrayFloat(h_array,complexToFloat(A.data(),A.size()),nels);
+
 	
 	fftwf_complex *in = new fftwf_complex[nels];
 	fftwf_complex *out = new fftwf_complex[nels];
@@ -333,29 +359,13 @@ int main(int argc, char *argv[])
 
 	fftwf_plan  plan_fftw = fftwf_plan_dft_1d(nels, in ,out, FFTW_FORWARD, FFTW_ESTIMATE);
 
-
+	double combined_fft = fft_gpu->evaluateSpeed();
 	double cpu_time = timeFunctionfft(samples);
 	double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
 
-	printf("Speedup CPU: %f \n" ,cpu_time / (runtime_init+runtime_read));
-	printf("Speedup FFTW: %f \n" ,fftw_time / (runtime_init+runtime_read));
+	printf("Speedup CPU: %fx \n" ,cpu_time / (combined_fft));
+	printf("Speedup FFTW: %fx \n" ,fftw_time / (combined_fft));
 
-
-	cl_event unmap_evt;
-	err = clEnqueueUnmapMemObject(que, output, h_array,
-		0, NULL, &unmap_evt);
-	ocl_check(err, "unmap buffer");
-
-	err = clWaitForEvents(1, &unmap_evt);
-	ocl_check(err, "wait for unmap");
-
-
-	clReleaseEvent(read_evt);
-	for(int i=0;i<iter;i++)
-		clReleaseEvent(init_evt[i]);
-	clReleaseKernel(init_bit_reversal);
-	clReleaseMemObject(output);
-	clReleaseMemObject(input);
 	delete[] in;
 	delete[] out;
 
