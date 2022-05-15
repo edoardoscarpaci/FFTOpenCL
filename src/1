@@ -1,0 +1,13 @@
+Memsize: 64
+number of platforms: 3
+fft_pass_0: 0.083968ms, 0.000762195GB/s, 0.000190549GE/s
+fft_pass_1: 0.054688ms, 0.00117028GB/s, 0.000292569GE/s
+fft_pass_2: 0.053568ms, 0.00119474GB/s, 0.000298686GE/s
+fft: 0.270336ms, 0.000236742GB/s
+bit_reverse: 0.02048ms, 0.003125GB/s
+read: 0.001952ms, 0.0327869GB/s
+combined: 0.292768ms, 0.000218603GB/s 5.46508e-05GE/s
+CPU function: 0.006392ms ,0.0100125GB/s
+FFTW CPU function: 0.000241ms ,0.26556GB/s
+Speedup CPU: 0.021833x 
+Speedup FFTW: 0.000823x 

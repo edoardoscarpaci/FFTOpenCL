@@ -16,10 +16,12 @@ do
     esac
 done
 
+shopt -s xpg_echo
+
 if $benchmarkMode; then
  	for j in $(seq 0 4);do \
 	for i in $(seq 3 $max_exp);do \
-	echo ${i} $(cd /home/edo/Projects/FFTOpenCL/src && OCL_PLATFORM=2 ../build/fft "/home/edo/Downloads/file_example_WAV_10MG.wav" $((2**${i})) ${kernel_name} | grep "Speedup\|ms") \
+	echo ${i} $(cd /home/edo/Projects/FFTOpenCL/src && OCL_PLATFORM=2 ../build/fft "/home/edo/Downloads/file_example_WAV_10MG.wav" $((2**${i})) ${kernel_name} | grep "Speedup") \
 	>> ~/Desktop/benchmarks/${kernel_name}_${j};
 	done;done;
 
