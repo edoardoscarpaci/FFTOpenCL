@@ -1,7 +1,7 @@
 /* A collection of functions wrapping the most common boilerplate
    of OpenCL program. You can now reduce the boilerplate to:
   */
-
+#pragma once
 #if 0 // example usage:
 #include "ocl_boiler.h"
 

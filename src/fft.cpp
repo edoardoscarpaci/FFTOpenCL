@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
 		fft_gpu = new FFTGpu3(p,d,ctx,que,prog);
 	}
 	else if(kernel == "fft_4"){
-		//fft_gpu = new FFTGpu4(p,d,ctx,que,prog);
+		fft_gpu = new FFTGpu4(p,d,ctx,que,prog);
 	}
 	
 	float *h_array = fft_gpu->fft(samples_float,nels);

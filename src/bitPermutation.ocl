@@ -36,8 +36,6 @@ int calculateIndex(int gid,int lenght, int iter){
 	return (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
 }
 
-
-
 inline float2 cmult(float2 a, float2 b){
     return (float2)( a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
 }
@@ -46,8 +44,24 @@ kernel void bitReverse(global float2* input,global float2* output,int logLength)
 	const int gid = get_global_id(0);
 	const int gid_permutated = generatePermutation(gid,logLength);
 	if(gid >= 1<<logLength) return;
+	
 
 	output[gid] = input[gid_permutated];
+
+}
+
+kernel void permutateArray(global float2* input,global float2* output,int lenght,int iter){
+	const int gid = get_global_id(0);
+	if(gid >= lenght/2) return;
+
+	const int id = calculateIndex(gid,lenght,iter);
+	const int stride = 1 << (iter-1);
+	const int id_strided = id +stride;
+	/*if(gid==1){
+		printf("[%d] gids: (%d %d) ids:(%d,%d)\n",iter,gid*2,gid*2+1,id,id_strided);		
+	}*/
+	output[gid*2] = input[id];
+	output[gid*2+1] = input[id_strided];
 }
 
 //working prototype
@@ -125,7 +139,7 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 kernel void fft_1(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length/2) return;
-	int logLength = log2((float)length);
+	int logLength = round(log2((float)length));
 	
 	//butterfly group_size
 	const int b_size = round(pown(2.,iter));
@@ -135,18 +149,10 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 	//Number of group
 	const int n_group = length / pown(2.,iter);
 
-	//const int base_offset = gid %n_group;
-
-	
-
-	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
-
-	//const int group_id = gid / pown(2.,n_group);
-	//0,1,2,3 = [0,1,2,3] = 0;
 
 	const int id = (gid / stride) * b_size + (gid%stride);
-	const int id_strided = id + stride;
 	const int j = (gid%stride) * n_group;
+	const int id_strided = id + stride;
 
 
 	/*if(gid ==1)
@@ -158,6 +164,7 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 
 	const float2 even = input[index_permutated];
 	const float2 odd = input[index_permutated_strided];
+
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
 	wj.x = cos(angle);
@@ -178,13 +185,19 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 		output[index_permutated_strided] = even - wj_odd;
 	}
 
+	/*if(gid==0){
+		printf("Ids:(%d,%d),(%d,%d) %d\n",id,id_strided,index_permutated,index_permutated_strided,logLength);
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
+	}*/
+
 }
 
 //optimization mod and pow using bit manipulation
 kernel void fft_2(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= length >> 1) return;
-	int logLength = log2((float)length);
+	int logLength = round(log2((float)length));
 	
 	//butterfly group_size
 	const int b_size = 1 << iter;
@@ -195,9 +208,11 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 	const int n_group = length >> iter;
 
 	const int base_offset = gid & (n_group -1);
+
 	// 0 1 2 3 = [0,1]= 0  e [2,3] = 1
 	const int group_id = gid >> n_group;
 	//0,1,2,3 = [0,1,2,3] = 0;
+
 	const int id = (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
 	const int id_strided = id + stride;
 
@@ -206,8 +221,14 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 	
 	const int j = (gid & (stride -1) ) * n_group;
 
+	/*if(gid == 2)
+		printf("Ids:(%d,%d, %d)\n",id,index_permutated,generatePermutation(index_permutated,log2((float)length)));
+
+	*/
+
 	const float2 even = input[index_permutated];
 	const float2 odd = input[index_permutated_strided];
+
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
 	wj.x = cos(angle);
@@ -238,6 +259,7 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 kernel void fft_3(global float2* input, global float2 *output,int length,int iter){
 	const int gid = get_global_id(0);
 	if (gid >= (length >> 1)) return;
+	
 
 	//butterfly group_size
 	const int b_size = 1 << iter;
@@ -253,6 +275,10 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	//0,1,2,3 = [0,1,2,3] = 0;
 	const int id = (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
 	const int id_strided = id + stride;
+
+	/*if(gid == 1)
+		printf("Ids:(%d, %d, %d)\n",gid,id,id_strided);
+	*/
 
 	const int j = (gid & (stride -1) ) * n_group;
 
@@ -273,25 +299,28 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	output[id_strided] = even - wj_odd;
 
 
-	/*if(gid==1){
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even.x,even.y,id_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
-		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
-	}*/
+	if(gid==1){
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y);
+	}
 }
 
-/*
 
-kernel void fft_4(global float2* input, global float2 *output,int length,int iter){
+kernel void fft_4(global float2* input, global float2 *output,int length,int iter,int logLength){
 	const int gid = get_global_id(0);
 	if (gid >= (length >> 1)) return;
+	
+	const int id = gid*2;
+	const int id_strided = id+1;
 
-	const int id = gid;
-	const int id_strided = gid+1
-
+	/*if(gid==1)
+		printf("(%d %d,%d %d) \n" ,gid,id,id_strided,length);
+*/
 	const float2 even = input[id];
 	const float2 odd = input[id_strided];
-
+	const int j = calculateJ(gid,length,iter);
 	const float angle = -2 * M_PI * j / length;
+	
 	float2 wj;
 	wj.x = cos(angle);
 	wj.y = sin(angle);
@@ -300,49 +329,20 @@ kernel void fft_4(global float2* input, global float2 *output,int length,int ite
 
 	const float2 even_output =  even  + wj_odd;
 	const float2 odd_output =  even  - wj_odd;
-
-	output[id] = even_output;
-	output[id_strided] = even - wj_odd;
-}
-
-
-/*
-kernel void fft_4(global float2* input,int length,int logLength){
-	const int gid = get_global_id(0);
-	if (gid >= (length >> 1)) return;
-	//printf("Input[%d]: (%f,%f)\n",gid,input[gid].x,input[gid].y);
-	if(gid==0){
-		printf("Local Sizee:%d \n",get_local_size(0));
-	}
-	for(int i=1;i<=logLength;i++){
-
-		const int stride = 1 << (i-1);
-
-		const int id = calculateIndex(gid,length,i);
-		const int id_strided = id + stride;
-		const int j = calculateJ(gid,length,i);
+	
+	const int output_id = calculateIndex(gid,length,iter);
+	const int output_id_strided = output_id + (1<<(iter-1));
 		
-		barrier(CLK_GLOBAL_MEM_FENCE);
-		const float2 even = input[id];
-		const float2 odd = input[id_strided];
-		barrier(CLK_GLOBAL_MEM_FENCE);
 
-		const float angle = -2 * M_PI * j / length;
-		float2 wj;
-		wj.x = cos(angle);
-		wj.y = sin(angle);
+	output[output_id] = even_output;
+	output[output_id_strided] = even - wj_odd;
 
-		const float2 wj_odd = cmult(wj,odd);
+	/*if(gid==1)
+		printf("Last output:Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",output_id,even_output.x,even_output.y,output_id_strided,odd_output.x,odd_output.y);
+	*/
 
-		const float2 even_output =  even  + wj_odd;
-		const float2 odd_output =  even  - wj_odd;
-		
-		barrier(CLK_GLOBAL_MEM_FENCE);
-		input[id] = even_output;
-		input[id_strided] = odd_output;
-		barrier(CLK_GLOBAL_MEM_FENCE);
-
-	}
+	/*if(gid==1){
+		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
+		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y);
+	}*/
 }
-
-*/
