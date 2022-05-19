@@ -15,6 +15,7 @@
 #include <functional>
 #include <chrono>
 #include "FFTgpu.hpp"
+#include <fstream>
 
 void error(const char * msg)
 {
@@ -238,12 +239,19 @@ cl_event fft_gpu(cl_command_queue q, cl_kernel k, size_t preferred_multiple_init
 
 int main(int argc, char *argv[])
 {
-	if (argc < 2) error("wav file path and cut ");
+	if (argc < 3) error("wav file path and cut ");
 	
 	const std::string path = argv[1];
 	const int cut = atoi(argv[2]);
 	const std::string kernel = argv[3];
+	bool writeToFile = false;
+	std::string pathToWrite;
+	if(argc == 5){
+		pathToWrite = argv[4];
+		std::cout << pathToWrite<<std::endl;
+		writeToFile= true;
 
+	}
 	//const size_t memsize = nels*sizeof(float)*2;
 
 
@@ -365,6 +373,21 @@ int main(int argc, char *argv[])
 
 	printf("Speedup CPU: %fx \n" ,cpu_time / (combined_fft));
 	printf("Speedup FFTW: %fx \n" ,fftw_time / (combined_fft));
+
+	if(writeToFile){
+		FILE* f = fopen(pathToWrite.c_str(),"w");
+
+		double combined_fft = fft_gpu->evaluateSpeed();
+		double cpu_time = timeFunctionfft(samples);
+		double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
+
+  	  	fprintf(f,"CPU function: %fms\n",cpu_time);
+  	  	fprintf(f,"GPU function: %fms\n",combined_fft);
+  	  	fprintf(f,"FFTW CPU function: %fms\n",fftw_time);
+
+		fprintf(f,"Speedup CPU: %fx \n" ,cpu_time / (combined_fft));
+		fprintf(f,"Speedup FFTW: %fx \n" ,fftw_time / (combined_fft));
+	}
 
 	delete[] in;
 	delete[] out;

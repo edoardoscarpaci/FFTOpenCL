@@ -57,9 +57,8 @@ kernel void permutateArray(global float2* input,global float2* output,int lenght
 	const int id = calculateIndex(gid,lenght,iter);
 	const int stride = 1 << (iter-1);
 	const int id_strided = id +stride;
-	/*if(gid==1){
-		printf("[%d] gids: (%d %d) ids:(%d,%d)\n",iter,gid*2,gid*2+1,id,id_strided);		
-	}*/
+
+
 	output[gid*2] = input[id];
 	output[gid*2+1] = input[id_strided];
 }
@@ -154,10 +153,6 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 	const int j = (gid%stride) * n_group;
 	const int id_strided = id + stride;
 
-
-	/*if(gid ==1)
-		printf("Stride: %d Bsize: %d Ngroup: %d Id: (%d %d) J:%d \n",stride,b_size,n_group,id,id_strided,j);
-	*/
 	const int index_permutated = generatePermutation(id,logLength);
 	const int index_permutated_strided= generatePermutation(id_strided,logLength);
 	
@@ -184,12 +179,6 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 		output[index_permutated] = even_output;
 		output[index_permutated_strided] = even - wj_odd;
 	}
-
-	/*if(gid==0){
-		printf("Ids:(%d,%d),(%d,%d) %d\n",id,id_strided,index_permutated,index_permutated_strided,logLength);
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
-		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
-	}*/
 
 }
 
@@ -221,11 +210,6 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 	
 	const int j = (gid & (stride -1) ) * n_group;
 
-	/*if(gid == 2)
-		printf("Ids:(%d,%d, %d)\n",id,index_permutated,generatePermutation(index_permutated,log2((float)length)));
-
-	*/
-
 	const float2 even = input[index_permutated];
 	const float2 odd = input[index_permutated_strided];
 
@@ -247,12 +231,6 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 		output[index_permutated] = even_output;
 		output[index_permutated_strided] = even - wj_odd;
 	}
-
-	/*if(iter==1){
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even.x,even.y,id_strided,odd.x,odd.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
-		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",index_permutated,even_output.x,even_output.y,index_permutated_strided,odd_output.x,odd_output.y);
-	}*/
-
 }
 
 
@@ -287,6 +265,7 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
+	
 	wj.x = cos(angle);
 	wj.y = sin(angle);
 
@@ -297,12 +276,6 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	
 	output[id] = even_output;
 	output[id_strided] = even - wj_odd;
-
-
-	if(gid==1){
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
-		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y);
-	}
 }
 
 
@@ -313,9 +286,6 @@ kernel void fft_4(global float2* input, global float2 *output,int length,int ite
 	const int id = gid*2;
 	const int id_strided = id+1;
 
-	/*if(gid==1)
-		printf("(%d %d,%d %d) \n" ,gid,id,id_strided,length);
-*/
 	const float2 even = input[id];
 	const float2 odd = input[id_strided];
 	const int j = calculateJ(gid,length,iter);
@@ -336,13 +306,4 @@ kernel void fft_4(global float2* input, global float2 *output,int length,int ite
 
 	output[output_id] = even_output;
 	output[output_id_strided] = even - wj_odd;
-
-	/*if(gid==1)
-		printf("Last output:Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",output_id,even_output.x,even_output.y,output_id_strided,odd_output.x,odd_output.y);
-	*/
-
-	/*if(gid==1){
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f)\n",id,even.x,even.y,id_strided,odd.x,odd.y);
-		//printf("Results:Even[%d] (%f %f) Odd[%d]: (%f,%f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y);
-	}*/
 }

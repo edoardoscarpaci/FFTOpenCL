@@ -1,0 +1,5 @@
+CPU function: 0.025791ms
+GPU function: 0.093568ms
+FFTW CPU function: 0.007074ms
+Speedup CPU: 0.275639x 
+Speedup FFTW: 0.075603x 
