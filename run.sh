@@ -1,5 +1,5 @@
 #! /bin/sh
-size=8;
+size=1024;
 input_file="../sample.wav"
 kernel_name="fft_3"
 platform="2"
