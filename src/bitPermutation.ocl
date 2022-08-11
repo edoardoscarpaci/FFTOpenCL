@@ -106,8 +106,12 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	const float2 odd = input[index_permutated_strided];
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
-	wj.x = cos(angle);
-	wj.y = sin(angle);
+	//wj.x = cos(angle);
+	//wj.y = sin(angle);
+
+	float cosvalue;
+	wj.y = sincos(angle,&cosvalue);
+	wj.x = cosvalue;
 
 	//printf("W%d: (%f %f)\n",j, wj.x,wj.y);
 
@@ -124,7 +128,7 @@ kernel void fft_k(global float2* input, global float2 *output,int length,int ite
 	}
 	else{
 		output[index_permutated] = even_output;
-		output[index_permutated_strided] = even - wj_odd;
+		output[index_permutated_strided] = odd_output;
 	}
 	
 	/*if(iter==1){
@@ -162,8 +166,12 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
-	wj.x = cos(angle);
-	wj.y = sin(angle);
+	//wj.x = cos(angle);
+	//wj.y = sin(angle);
+
+	float cosvalue;
+	wj.y = sincos(angle,&cosvalue);
+	wj.x = cosvalue;
 
 
 	const float2 wj_odd = cmult(wj,odd);
@@ -215,8 +223,13 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
-	wj.x = cos(angle);
-	wj.y = sin(angle);
+	//wj.x = cos(angle);
+	//wj.y = sin(angle);
+
+	//wj.y = sincos(angle,&wj.x);
+	float cosvalue;
+	wj.y = sincos(angle,&cosvalue);
+	wj.x = cosvalue;
 
 	const float2 wj_odd = cmult(wj,odd);
 
@@ -229,7 +242,7 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 	}
 	else{
 		output[index_permutated] = even_output;
-		output[index_permutated_strided] = even - wj_odd;
+		output[index_permutated_strided] = odd_output;
 	}
 }
 
@@ -266,8 +279,12 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
 	
-	wj.x = cos(angle);
-	wj.y = sin(angle);
+	//wj.x = cos(angle);
+	//wj.y = sin(angle);
+
+	//wj.y = sincos(angle,&wj.x);
+	wj.y = sincos(angle,(float*)&wj);
+
 
 	const float2 wj_odd = cmult(wj,odd);
 
@@ -275,7 +292,7 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	const float2 odd_output =  even  - wj_odd;
 	
 	output[id] = even_output;
-	output[id_strided] = even - wj_odd;
+	output[id_strided] = odd_output;
 }
 
 
@@ -292,8 +309,13 @@ kernel void fft_4(global float2* input, global float2 *output,int length,int ite
 	const float angle = -2 * M_PI * j / length;
 	
 	float2 wj;
-	wj.x = cos(angle);
-	wj.y = sin(angle);
+	//wj.x = cos(angle);
+	//wj.y = sin(angle);
+
+	//wj.y = sincos(angle,&wj.x);
+	float cosvalue;
+	wj.y = sincos(angle,&cosvalue);
+	wj.x = cosvalue;
 
 	const float2 wj_odd = cmult(wj,odd);
 
@@ -305,5 +327,5 @@ kernel void fft_4(global float2* input, global float2 *output,int length,int ite
 		
 
 	output[output_id] = even_output;
-	output[output_id_strided] = even - wj_odd;
+	output[output_id_strided] = odd_output;
 }

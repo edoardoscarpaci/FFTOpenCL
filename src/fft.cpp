@@ -244,6 +244,8 @@ int main(int argc, char *argv[])
 	const std::string path = argv[1];
 	const int cut = atoi(argv[2]);
 	const std::string kernel = argv[3];
+
+
 	bool writeToFile = false;
 	std::string pathToWrite;
 	if(argc == 5){
@@ -336,7 +338,7 @@ int main(int argc, char *argv[])
 
 
 	//verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
-
+	
 	std::vector<std::complex<float>> A = fft.computeFFT(samples);
 
 	FFTGpu* fft_gpu;
@@ -367,7 +369,7 @@ int main(int argc, char *argv[])
 
 	fftwf_plan  plan_fftw = fftwf_plan_dft_1d(nels, in ,out, FFTW_FORWARD, FFTW_ESTIMATE);
 
-	double combined_fft = fft_gpu->evaluateSpeed();
+	double combined_fft = fft_gpu->evaluateSpeed(nullptr);
 	double cpu_time = timeFunctionfft(samples);
 	double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
 
@@ -376,13 +378,16 @@ int main(int argc, char *argv[])
 
 	if(writeToFile){
 		FILE* f = fopen(pathToWrite.c_str(),"w");
-
-		double combined_fft = fft_gpu->evaluateSpeed();
+		double combined_fft = fft_gpu->evaluateSpeed(f);
 		double cpu_time = timeFunctionfft(samples);
 		double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
 
+
+		
+
   	  	fprintf(f,"CPU function: %fms\n",cpu_time);
   	  	fprintf(f,"GPU function: %fms\n",combined_fft);
+  	  	
   	  	fprintf(f,"FFTW CPU function: %fms\n",fftw_time);
 
 		fprintf(f,"Speedup CPU: %fx \n" ,cpu_time / (combined_fft));

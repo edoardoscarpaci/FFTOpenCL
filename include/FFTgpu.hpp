@@ -28,7 +28,7 @@ public:
 	}
 	virtual float* fft(float* samples,cl_int nels) = 0;
 	virtual inline std::vector<cl_event> getEvents(){return events;};
-	virtual double evaluateSpeed() = 0;
+	virtual double evaluateSpeed(FILE* f) = 0;
 };
 
 
@@ -128,7 +128,7 @@ public:
 		return h_array;
 	}
 
-	virtual double evaluateSpeed(){
+	virtual double evaluateSpeed(FILE* f){
 		const int memsize = sizeof(float)*2*nels;
 		
 		
@@ -144,6 +144,16 @@ public:
 		printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
 
 		printf("combined: %gms, %gGB/s\n", runtime_read+runtime_fft, 1.0e-6*memsize/(runtime_read+runtime_fft));
+		
+
+		if(f != NULL){
+  	  		fprintf(f,"fft: %gms, %gGB/s\n", runtime_fft, 1.0e-6*memsize/runtime_fft);
+			fprintf(f,"read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
+
+			fprintf(f,"combined: %gms %gGB/s\n",runtime_read+runtime_fft, 1.0e-6*memsize/(runtime_read+runtime_fft));
+
+
+		}
 		return runtime_read+runtime_fft;
 	}
 	
@@ -290,7 +300,7 @@ public:
 		return h_array;
 	}
 
-	virtual double evaluateSpeed(){
+	virtual double evaluateSpeed(FILE* f){
 		const int memsize = sizeof(float)*2*nels;
 		
 		printf("\n");
@@ -312,6 +322,18 @@ public:
 		
 		printf("combined: %gms, %gGB/s %gGE/s\n",combined, 1.0e-6*memsize/combined, 1.0e-6*2*nels/combined);
 		printf("\n");
+
+
+		if(f != NULL){
+  	  		fprintf(f,"fft: %gms, %gGB/s\n", runtime_fft, 1.0e-6*memsize/runtime_fft);
+			fprintf(f,"bit_reverse: %gms, %gGB/s\n", runtime_bit_reverse, 1.0e-6*memsize/runtime_bit_reverse);
+			fprintf(f,"read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
+
+
+			fprintf(f,"combined: %gms %gGB/s\n",combined, 1.0e-6*memsize/combined);
+
+
+		}
 		
 		return combined;
 	}
@@ -486,7 +508,7 @@ public:
 		return h_array;
 	}
 
-	virtual double evaluateSpeed(){
+	virtual double evaluateSpeed(FILE* f){
 		const int memsize = sizeof(float)*2*nels;
 		
 		printf("\n");
@@ -521,6 +543,18 @@ public:
 		printf("combined: %gms, %gGB/s %gGE/s\n",combined, 1.0e-6*memsize/combined, 1.0e-6*2*nels/combined);
 		printf("\n");
 		
+		if(f != NULL){
+  	  		fprintf(f,"fft: %gms, %gGB/s\n", runtime_fft, 1.0e-6*memsize/runtime_fft);
+			fprintf(f,"bit_reverse: %gms, %gGB/s\n", runtime_bit_reverse, 1.0e-6*memsize/runtime_bit_reverse);
+			fprintf(f,"permutate : %gms, %gGB/s\n", runtime_reverse, 1.0e-6*memsize/runtime_reverse);
+			fprintf(f,"read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
+
+
+			fprintf(f,"combined: %gms %gGB/s\n",combined, 1.0e-6*memsize/combined);
+
+		}
+
+
 		return combined;
 	}
 	

@@ -1,0 +1,9 @@
+fft: 0.2232ms, 1.17448GB/s
+bit_reverse: 0.01136ms, 23.0761GB/s
+read: 0.040416ms, 6.48614GB/s
+combined 0.953334GB/s
+CPU function: 43.822347ms
+GPU function: 0.274976ms
+FFTW CPU function: 0.371211ms
+Speedup CPU: 159.367898x 
+Speedup FFTW: 1.349976x 
