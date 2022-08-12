@@ -575,3 +575,155 @@ public:
 		clReleaseMemObject(input);
 	}
 };
+
+class FFTCompact3 :public virtual FFTGpu{
+private:
+	cl_mem input;
+	cl_mem output;
+	cl_kernel fft_kernel;
+	std::string kernel_version;
+	
+	cl_int nels;
+	float* h_array;
+	size_t maxLws;
+
+private:
+	void swapIO(){
+		cl_mem tmp = input;
+		input = output;
+		output = tmp;
+	}
+
+	void inizializeMemory(float* samples){
+		const int memsize = sizeof(float) * 2 *nels;
+		cl_int err;
+		input = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, memsize, samples, &err);
+		ocl_check(err, "create input array");
+	
+		output = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, memsize, NULL, &err);
+			ocl_check(err, "create output array");
+	};
+
+
+	void setMemoryFFTKernel(cl_int maxIter){
+		cl_int err;
+		err = clSetKernelArg(fft_kernel, 0, sizeof(input), &input);
+		ocl_check(err, "set kernel arg 0 for compact_fft3");
+
+		err = clSetKernelArg(fft_kernel, 1, sizeof(output), &output);
+		ocl_check(err, "set kernel arg 1 for compact_fft3");
+
+		err = clSetKernelArg(fft_kernel, 2, sizeof(nels),&nels);
+		ocl_check(err, "set kernel arg 2 for compact_fft3");
+
+		err = clSetKernelArg(fft_kernel, 3, sizeof(maxIter),&maxIter);
+		ocl_check(err, "set kernel arg 3 for compact_fft3");
+
+		err = clSetKernelArg(fft_kernel, 4, nels * 2 * sizeof(float) , NULL);
+		ocl_check(err, "set kernel arg 4 for compact_fft3");
+
+	}
+
+	void issueKernel(cl_kernel kernel,cl_int gws_elements){
+		cl_int err;
+		
+		
+		size_t gws[] = { round_mul_up(gws_elements, maxLws) };
+
+		printf("Issuing kernel with elements %d, gws %zd and  maxLws %zd\n",gws_elements,gws[0],maxLws );
+
+		cl_event fft_gpu_evt;			
+		size_t lws[1] = {maxLws};
+		
+		if(events.size() > 0)
+			err = clEnqueueNDRangeKernel(queue, kernel,
+				1, NULL, gws, lws,
+				events.size(), events.data(), &fft_gpu_evt );
+		else
+			err = clEnqueueNDRangeKernel(queue, kernel,
+				1, NULL, gws, lws,
+				0, NULL, &fft_gpu_evt );
+		ocl_check(err, "launch kernel fft_4");
+		events.emplace_back(fft_gpu_evt);
+	}
+
+public:
+	FFTCompact3(cl_platform_id p,cl_device_id device,cl_context ctx,cl_command_queue queue,cl_program prog,size_t maxLws)
+	:FFTGpu(p,device,ctx,queue,prog){
+		
+		cl_int err;
+		fft_kernel = clCreateKernel(prog, "compact_fft_3", &err);
+		ocl_check(err, "create kernel compact_fft_3");
+
+
+		this->maxLws = maxLws;
+	}
+
+	virtual float* fft(float* samples,cl_int nels) override{
+	 	this->nels = nels;
+		const int memsize = sizeof(float)*2*nels;
+		const int maxIter = log2(nels);
+		
+		inizializeMemory(samples);
+		setMemoryFFTKernel(maxIter);
+		
+		issueKernel(fft_kernel,nels/2);
+		//swapIO();
+
+		cl_event read_evt;
+		cl_int err;
+		std::cout<<"Mapping Buffer"<<std::endl;
+
+		h_array = (float*)clEnqueueMapBuffer(queue, output, CL_TRUE, CL_MAP_READ,
+			0, memsize,
+			events.size(), events.data(), &read_evt,
+			&err);
+		ocl_check(err, "map buffer");
+		events.emplace_back(read_evt);
+
+		return h_array;
+	}
+
+	virtual double evaluateSpeed(FILE* f){
+		const int memsize = sizeof(float)*2*nels;
+		
+		printf("\n");
+		double runtime_fft = runtime_ms(events[0]);
+		double runtime_read = runtime_ms(events[1]);
+
+		printf("fft: %gms, %gGB/s\n", runtime_fft, 1.0e-6*memsize/runtime_fft);
+		printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
+		
+		double combined = runtime_fft + runtime_read ;
+		printf("\n");
+		
+		printf("combined: %gms, %gGB/s %gGE/s\n",combined, 1.0e-6*memsize/combined, 1.0e-6*2*nels/combined);
+		printf("\n");
+		
+		if(f != NULL){
+  	  		fprintf(f,"fft: %gms, %gGB/s\n", runtime_fft, 1.0e-6*memsize/runtime_fft);
+			fprintf(f,"read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
+			fprintf(f,"combined: %gms %gGB/s\n",combined, 1.0e-6*memsize/combined);
+		}
+
+
+		return combined;
+	}
+	
+	virtual ~FFTCompact3(){
+		cl_event unmap_evt;
+		cl_int err;
+		err = clEnqueueUnmapMemObject(queue, output, h_array,
+			0, NULL, &unmap_evt);
+		ocl_check(err, "unmap buffer");
+
+		err = clWaitForEvents(1, &unmap_evt);
+		ocl_check(err, "wait for unmap");
+
+
+		clReleaseKernel(fft_kernel);
+		clReleaseMemObject(output);
+		clReleaseMemObject(input);
+	}
+	
+};

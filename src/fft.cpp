@@ -274,7 +274,9 @@ int main(int argc, char *argv[])
 	std::cout <<"Samples Size Resized: "<< nels <<std::endl;
 	const int memsize = nels * 2 * sizeof(float);	
 	std::cout <<"Memsize: "<< memsize <<std::endl;
+
 	
+
 	float* samples_float = complexToFloat(samples.data(),samples.size());
 
 
@@ -284,61 +286,20 @@ int main(int argc, char *argv[])
 	cl_context ctx = create_context(p, d);
 	cl_command_queue que = create_queue(ctx, d);
 	cl_program prog = create_program("bitPermutation.ocl", ctx, d);
-/*
-	cl_int err;
-	cl_kernel init_bit_reversal = clCreateKernel(prog, kernel.c_str(), &err);
-	ocl_check(err, "create kernel fft_k");
 
+	size_t maxLws;
+	clGetDeviceInfo(d, CL_DEVICE_MAX_WORK_GROUP_SIZE,
+		sizeof(maxLws), &maxLws, NULL);
 
-	cl_mem input = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, memsize, samples_float, &err);
-	ocl_check(err, "create input array");
-	
-	cl_mem output = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, memsize, NULL, &err);
-	ocl_check(err, "create output array");
-
-
-	size_t preferred_multiple_init;
-	clGetKernelWorkGroupInfo(init_bit_reversal, d, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-		sizeof(preferred_multiple_init), &preferred_multiple_init, NULL);
-	const int iter = log2(nels);
-
-	cl_event init_evt[iter];
-	for(int i=1;i<=iter;i++){
-		init_evt[i-1] = fft_gpu(que, init_bit_reversal, preferred_multiple_init, input, output, nels,i, i-1,init_evt);
-		cl_mem tmp = input;
-		input = output;
-		output = tmp;
+	if(kernel == "compact_fft_3"){
+		printf("Maximum size: %d\n",maxLws);
 	}
-	cl_mem tmp = input;
-	input = output;
-	output = tmp;
-	
-	cl_event read_evt;
-	float* h_array = (float*)clEnqueueMapBuffer(que, output, CL_TRUE, CL_MAP_READ,
-		0, memsize,
-		1, init_evt+(iter-1), &read_evt,
-		&err);
-	ocl_check(err, "map buffer");
-		
 
-	
-	double runtime_init = total_runtime_ms(init_evt[0],init_evt[iter-1]);
-	double runtime_read = runtime_ms(read_evt);
+	if(nels/2 > maxLws && kernel == "compact_fft_3"){
+		printf("Size too big %d for compact fft3, maximum size: %d\n",nels,maxLws);
+		return 1;
+	}
 
-	for (int pass = 0; pass < iter; ++pass) {
-		double runtime_pass = runtime_ms(init_evt[pass]);
-		printf("fft_pass_%d: %gms, %gGB/s, %gGE/s\n",pass,runtime_pass,1.0e-6*memsize/runtime_pass,1.0e-6*2*nels/runtime_pass);
-	} 
-
-	printf("fft: %gms, %gGB/s\n", runtime_init, 1.0e-6*memsize/runtime_init);
-	printf("read: %gms, %gGB/s\n", runtime_read, 1.0e-6*memsize/runtime_read);
-
-	printf("combined: %gms, %gGB/s\n", runtime_read+runtime_init, 1.0e-6*memsize/(runtime_read+runtime_init));
-	*/
-
-
-	//verifyArray<float>(h_array,complexToFloat(A.data(),A.size()),nels);
-	
 	std::vector<std::complex<float>> A = fft.computeFFT(samples);
 
 	FFTGpu* fft_gpu;
@@ -352,14 +313,16 @@ int main(int argc, char *argv[])
 	else if(kernel == "fft_4"){
 		fft_gpu = new FFTGpu4(p,d,ctx,que,prog);
 	}
+	else if(kernel == "compact_fft_3"){
+		fft_gpu = new FFTCompact3(p,d,ctx,que,prog,maxLws);
+	}
+	else{
+		printf("No kernel selected");
+		return 1;
+	} 
 	
 	float *h_array = fft_gpu->fft(samples_float,nels);
 	
-		
-	/*for(int i=0;i<A.size();i++){
-		printf("[%d] cpu:(%f,%f) gpu:(%f,%f)\n",i,A[i].real(),A[i].imag(),h_array[i*2],h_array[i*2+1]);
-	}*/
-
 	verifyArrayFloat(h_array,complexToFloat(A.data(),A.size()),nels);
 
 	
@@ -382,8 +345,6 @@ int main(int argc, char *argv[])
 		double cpu_time = timeFunctionfft(samples);
 		double fftw_time = timeFunctionfftwf(plan_fftw,memsize);
 
-
-		
 
   	  	fprintf(f,"CPU function: %fms\n",cpu_time);
   	  	fprintf(f,"GPU function: %fms\n",combined_fft);

@@ -26,6 +26,11 @@ if $benchmarkMode; then
 	for i in $(seq 3 $max_exp);do \
 	mkdir -p ~/Desktop/benchmarks/fft_${k} && mkdir -p ~/Desktop/benchmarks/fft_${k}/${j} && cd /home/edo/Projects/FFTOpenCL/src && OCL_PLATFORM=2 ../build/fft "/home/edo/Downloads/file_example_WAV_10MG.wav" $((2**${i})) fft_${k} ~/Desktop/benchmarks/fft_${k}/${j}/${i}
 	done;done;done;
+
+	for j in $(seq 0 4);do \
+	for i in $(seq 3 10);do \
+	mkdir -p ~/Desktop/benchmarks/compact_fft3 && mkdir -p ~/Desktop/benchmarks/compact_fft3/${j} && cd /home/edo/Projects/FFTOpenCL/src && OCL_PLATFORM=2 ../build/fft "/home/edo/Downloads/file_example_WAV_10MG.wav" $((2**${i})) fcompact_fft_3 ~/Desktop/benchmarks/compact_fft_3/${j}/${i}
+	done;done; 
 else
 	if $makeFile; then
 		cd /home/edo/Projects/FFTOpenCL/ \
