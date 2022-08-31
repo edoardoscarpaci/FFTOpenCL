@@ -166,9 +166,7 @@ kernel void fft_1(global float2* input, global float2 *output,int length,int ite
 
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
-	//wj.x = cos(angle);
-	//wj.y = sin(angle);
-
+	
 	float cosvalue;
 	wj.y = sincos(angle,&cosvalue);
 	wj.x = cosvalue;
@@ -223,10 +221,6 @@ kernel void fft_2(global float2* input, global float2 *output,int length,int ite
 
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
-	//wj.x = cos(angle);
-	//wj.y = sin(angle);
-
-	//wj.y = sincos(angle,&wj.x);
 	float cosvalue;
 	wj.y = sincos(angle,&cosvalue);
 	wj.x = cosvalue;
@@ -251,7 +245,6 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	const int gid = get_global_id(0);
 	if (gid >= (length >> 1)) return;
 	
-
 	//butterfly group_size
 	const int b_size = 1 << iter;
 	//stride to pick the odd term (1,2,4,8....)
@@ -267,10 +260,6 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	const int id = (gid >> ( iter -1 )) * b_size + (gid & (stride -1));
 	const int id_strided = id + stride;
 
-	/*if(gid == 1)
-		printf("Ids:(%d, %d, %d)\n",gid,id,id_strided);
-	*/
-
 	const int j = (gid & (stride -1) ) * n_group;
 
 	const float2 even = input[id];
@@ -279,10 +268,6 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 	const float angle = -2 * M_PI * j / length;
 	float2 wj;
 	
-	//wj.x = cos(angle);
-	//wj.y = sin(angle);
-
-	//wj.y = sincos(angle,&wj.x);
 	wj.y = sincos(angle,(float*)&wj);
 
 
@@ -290,10 +275,6 @@ kernel void fft_3(global float2* input, global float2 *output,int length,int ite
 
 	const float2 even_output =  even  + wj_odd;
 	const float2 odd_output =  even  - wj_odd;
-
-	if(gid==0){
-		printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
-	}
 	
 	output[id] = even_output;
 	output[id_strided] = odd_output;
@@ -347,9 +328,7 @@ kernel void compact_fft_3(global float2* input, global float2 *output,
 
 		const float2 even_output =  even  + wj_odd;
 		const float2 odd_output =  even  - wj_odd;
-		if(gid==0){
-			printf("Even[%d]: (%f %f) Odd[%d]: (%f,%f) W%d: (%f %f) W%d_odd: (%f %f)\n",id,even_output.x,even_output.y,id_strided,odd_output.x,odd_output.y,j,wj.x,wj.y,j, wj_odd.x,wj_odd.y);
-		}
+		
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -357,7 +336,9 @@ kernel void compact_fft_3(global float2* input, global float2 *output,
 		lmem[id_strided] = odd_output;
 	}
 
-	for(int i=0;i<length;i++) output[i] = lmem[i];
+	barrier(CLK_LOCAL_MEM_FENCE);
+	output[gid] = lmem[gid];
+	output[gid + (length>>1)] = lmem[gid + (length>>1)];
 }
 
 
