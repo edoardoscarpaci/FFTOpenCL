@@ -627,13 +627,13 @@ private:
 	void issueKernel(cl_kernel kernel,cl_int gws_elements){
 		cl_int err;
 		
-		
-		size_t gws[] = { round_mul_up(gws_elements, maxLws) };
-
+		std::cout<< "GWS: " << gws_elements<< std::endl;
+		//size_t gws[] = { round_mul_up(gws_elements, maxLws) };
+		size_t gws[] = {gws_elements};
 		printf("Issuing kernel with elements %d, gws %zd and  maxLws %zd\n",gws_elements,gws[0],maxLws );
 
 		cl_event fft_gpu_evt;			
-		size_t lws[1] = {maxLws};
+		size_t lws[1] = {gws_elements};
 		
 		if(events.size() > 0)
 			err = clEnqueueNDRangeKernel(queue, kernel,
@@ -668,7 +668,6 @@ public:
 		setMemoryFFTKernel(maxIter);
 		
 		issueKernel(fft_kernel,nels/2);
-		//swapIO();
 
 		cl_event read_evt;
 		cl_int err;

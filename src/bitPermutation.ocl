@@ -285,12 +285,16 @@ kernel void compact_fft_3(global float2* input, global float2 *output,
 							int length,int maxIter,local float2 * lmem){
 	
 	const int gid = get_global_id(0);
-	if(gid >= length) return; 
+	if (gid >= (length >> 1)) return;
+	
 
 	const int gid_permutated = generatePermutation(gid,maxIter);
+	const int gid_permutated_2 = generatePermutation(gid + (length >> 1),maxIter);
+
 	lmem[gid] = input[gid_permutated];
+	lmem[gid + (length >> 1)] = input[gid_permutated_2];
+
 	
-	if (gid >= (length >> 1)) return;
 
 	float2* temp;
 

@@ -292,8 +292,9 @@ int main(int argc, char *argv[])
 		sizeof(maxLws), &maxLws, NULL);
 
 	if(kernel == "compact_fft_3"){
-		printf("Maximum size: %d\n",maxLws);
+		printf("Maximum size: %d\n",maxLws * 2);
 	}
+
 
 	if(nels/2 > maxLws && kernel == "compact_fft_3"){
 		printf("Size too big %d for compact fft3, maximum size: %d\n",nels,maxLws);
