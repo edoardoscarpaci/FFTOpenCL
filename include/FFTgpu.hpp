@@ -627,7 +627,6 @@ private:
 	void issueKernel(cl_kernel kernel,cl_int gws_elements){
 		cl_int err;
 		
-		std::cout<< "GWS: " << gws_elements<< std::endl;
 		//size_t gws[] = { round_mul_up(gws_elements, maxLws) };
 		size_t gws[] = {gws_elements};
 		printf("Issuing kernel with elements %d, gws %zd and  maxLws %zd\n",gws_elements,gws[0],maxLws );
